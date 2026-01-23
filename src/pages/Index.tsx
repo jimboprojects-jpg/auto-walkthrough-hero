@@ -9,6 +9,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { FeatureCard } from "@/components/FeatureCard";
 import { BackgroundEffects } from "@/components/BackgroundEffects";
 import { useToast } from "@/hooks/use-toast";
+import { captureScreenshots } from "@/lib/api/screenshots";
 
 const Index = () => {
   const { toast } = useToast();
@@ -20,6 +21,7 @@ const Index = () => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [siteMetadata, setSiteMetadata] = useState<{ title?: string; description?: string } | null>(null);
   const [screenshots, setScreenshots] = useState<{
     mobile?: string;
     tablet?: string;
@@ -43,37 +45,67 @@ const Index = () => {
     setIsLoading(true);
     setHasSubmitted(true);
     setProgress(0);
-    setStatus("Initializing capture...");
+    setStatus("Initializing Firecrawl capture...");
+    setScreenshots({});
+    setSiteMetadata(null);
 
-    // Simulate capture process
-    const stages = [
-      { progress: 25, status: "Capturing mobile view...", delay: 800 },
-      { progress: 50, status: "Capturing tablet view...", delay: 600 },
-      { progress: 75, status: "Capturing laptop view...", delay: 600 },
-      { progress: 100, status: "Capturing desktop view...", delay: 600 },
-    ];
+    // Start progress animation
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 5;
+      });
+    }, 500);
 
-    for (const stage of stages) {
-      await new Promise((resolve) => setTimeout(resolve, stage.delay));
-      setProgress(stage.progress);
-      setStatus(stage.status);
+    setStatus("Capturing screenshots across all devices...");
+
+    try {
+      const result = await captureScreenshots(submittedUrl);
+      
+      clearInterval(progressInterval);
+      
+      if (result.success && result.screenshots) {
+        setProgress(100);
+        setStatus("Capture complete!");
+        setScreenshots(result.screenshots);
+        
+        if (result.metadata) {
+          setSiteMetadata({
+            title: result.metadata.title,
+            description: result.metadata.description,
+          });
+        }
+        
+        toast({
+          title: "Screenshots captured!",
+          description: result.metadata?.title 
+            ? `Captured: ${result.metadata.title}` 
+            : "You can now start recording the navigation video.",
+        });
+      } else {
+        setProgress(0);
+        setStatus("Capture failed");
+        toast({
+          title: "Capture failed",
+          description: result.error || "Failed to capture screenshots. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      clearInterval(progressInterval);
+      setProgress(0);
+      setStatus("Error occurred");
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
     }
 
-    // Set demo screenshots (in real app, these would come from actual captures)
-    setScreenshots({
-      mobile: `https://api.microlink.io/?url=${encodeURIComponent(submittedUrl)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=375&viewport.height=667`,
-      tablet: `https://api.microlink.io/?url=${encodeURIComponent(submittedUrl)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=768&viewport.height=1024`,
-      laptop: `https://api.microlink.io/?url=${encodeURIComponent(submittedUrl)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1366&viewport.height=768`,
-      desktop: `https://api.microlink.io/?url=${encodeURIComponent(submittedUrl)}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1920&viewport.height=1080`,
-    });
-
     setIsLoading(false);
-    setStatus("Ready to record");
-    
-    toast({
-      title: "Screenshots captured!",
-      description: "You can now start recording the navigation video.",
-    });
   }, [toast]);
 
   const handleStartRecording = () => {
@@ -191,6 +223,20 @@ const Index = () => {
               exit={{ opacity: 0 }}
             >
               <section className="mb-12 max-w-2xl mx-auto">
+                {siteMetadata?.title && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="glass rounded-xl p-4 mb-6 text-center"
+                  >
+                    <h3 className="font-semibold text-lg">{siteMetadata.title}</h3>
+                    {siteMetadata.description && (
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                        {siteMetadata.description}
+                      </p>
+                    )}
+                  </motion.div>
+                )}
                 <RecordingControls
                   isRecording={isRecording}
                   isPaused={isPaused}
