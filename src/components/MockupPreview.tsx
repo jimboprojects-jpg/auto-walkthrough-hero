@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { DeviceFrame } from "./DeviceFrame";
+import { DeviceColorPicker, DeviceColorTheme } from "./DeviceColorPicker";
 import { Download, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +43,7 @@ const downloadScreenshot = async (type: string, screenshot: string) => {
 
 export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPreviewProps) => {
   const { toast } = useToast();
+  const [colorTheme, setColorTheme] = useState<DeviceColorTheme>("space-gray");
 
   const handleDownloadSingle = (type: string, screenshot: string) => {
     downloadScreenshot(type, screenshot);
@@ -115,21 +118,25 @@ export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPre
       className="w-full"
     >
       {/* Section header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           <Layers className="w-5 h-5 text-primary" />
           <h2 className="text-xl font-semibold">Device Mockups</h2>
         </div>
         
-        <Button
-          variant="outline"
-          className="rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10"
-          onClick={handleDownloadAll}
-          disabled={!hasAnyScreenshots}
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Download All
-        </Button>
+        <div className="flex flex-wrap items-center gap-4">
+          <DeviceColorPicker selectedTheme={colorTheme} onThemeChange={setColorTheme} />
+          
+          <Button
+            variant="outline"
+            className="rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10"
+            onClick={handleDownloadAll}
+            disabled={!hasAnyScreenshots}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download All
+          </Button>
+        </div>
       </div>
 
       {/* Device grid */}
@@ -139,6 +146,7 @@ export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPre
           screenshot={screenshots.mobile}
           isRecording={isRecording}
           isLoading={isLoading}
+          colorTheme={colorTheme}
           onDownload={handleDownloadSingle}
         />
         <DeviceFrame
@@ -146,6 +154,7 @@ export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPre
           screenshot={screenshots.tablet}
           isRecording={isRecording}
           isLoading={isLoading}
+          colorTheme={colorTheme}
           onDownload={handleDownloadSingle}
         />
         <DeviceFrame
@@ -153,6 +162,7 @@ export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPre
           screenshot={screenshots.laptop}
           isRecording={isRecording}
           isLoading={isLoading}
+          colorTheme={colorTheme}
           onDownload={handleDownloadSingle}
         />
         <DeviceFrame
@@ -160,6 +170,7 @@ export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPre
           screenshot={screenshots.desktop}
           isRecording={isRecording}
           isLoading={isLoading}
+          colorTheme={colorTheme}
           onDownload={handleDownloadSingle}
         />
       </div>
