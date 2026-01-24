@@ -216,40 +216,42 @@ const Index = () => {
 
         {/* Recording Controls & Mockups */}
         <AnimatePresence>
-          {hasSubmitted && !isLoading && (
+          {hasSubmitted && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <section className="mb-12 max-w-2xl mx-auto">
-                {siteMetadata?.title && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="glass rounded-xl p-4 mb-6 text-center"
-                  >
-                    <h3 className="font-semibold text-lg">{siteMetadata.title}</h3>
-                    {siteMetadata.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {siteMetadata.description}
-                      </p>
-                    )}
-                  </motion.div>
-                )}
-                <RecordingControls
-                  isRecording={isRecording}
-                  isPaused={isPaused}
-                  duration={duration}
-                  onStart={handleStartRecording}
-                  onPause={handlePauseRecording}
-                  onStop={handleStopRecording}
-                  onReset={handleResetRecording}
-                />
-              </section>
+              {!isLoading && (
+                <section className="mb-12 max-w-2xl mx-auto">
+                  {siteMetadata?.title && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="glass rounded-xl p-4 mb-6 text-center"
+                    >
+                      <h3 className="font-semibold text-lg">{siteMetadata.title}</h3>
+                      {siteMetadata.description && (
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          {siteMetadata.description}
+                        </p>
+                      )}
+                    </motion.div>
+                  )}
+                  <RecordingControls
+                    isRecording={isRecording}
+                    isPaused={isPaused}
+                    duration={duration}
+                    onStart={handleStartRecording}
+                    onPause={handlePauseRecording}
+                    onStop={handleStopRecording}
+                    onReset={handleResetRecording}
+                  />
+                </section>
+              )}
 
               <section className="mb-16">
-                <MockupPreview screenshots={screenshots} isRecording={isRecording} />
+                <MockupPreview screenshots={screenshots} isRecording={isRecording} isLoading={isLoading} />
               </section>
             </motion.div>
           )}

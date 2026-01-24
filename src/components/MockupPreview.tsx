@@ -13,6 +13,7 @@ interface MockupPreviewProps {
     desktop?: string;
   };
   isRecording?: boolean;
+  isLoading?: boolean;
 }
 
 // Helper to convert base64 or data URL to blob
@@ -38,7 +39,7 @@ const downloadScreenshot = async (type: string, screenshot: string) => {
   }
 };
 
-export const MockupPreview = ({ screenshots, isRecording }: MockupPreviewProps) => {
+export const MockupPreview = ({ screenshots, isRecording, isLoading }: MockupPreviewProps) => {
   const { toast } = useToast();
 
   const handleDownloadSingle = (type: string, screenshot: string) => {
@@ -137,24 +138,28 @@ export const MockupPreview = ({ screenshots, isRecording }: MockupPreviewProps) 
           type="mobile"
           screenshot={screenshots.mobile}
           isRecording={isRecording}
+          isLoading={isLoading}
           onDownload={handleDownloadSingle}
         />
         <DeviceFrame
           type="tablet"
           screenshot={screenshots.tablet}
           isRecording={isRecording}
+          isLoading={isLoading}
           onDownload={handleDownloadSingle}
         />
         <DeviceFrame
           type="laptop"
           screenshot={screenshots.laptop}
           isRecording={isRecording}
+          isLoading={isLoading}
           onDownload={handleDownloadSingle}
         />
         <DeviceFrame
           type="desktop"
           screenshot={screenshots.desktop}
           isRecording={isRecording}
+          isLoading={isLoading}
           onDownload={handleDownloadSingle}
         />
       </div>

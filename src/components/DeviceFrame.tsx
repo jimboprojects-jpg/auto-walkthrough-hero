@@ -1,11 +1,13 @@
 import { motion } from "framer-motion";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface DeviceFrameProps {
   type: "mobile" | "tablet" | "laptop" | "desktop";
   screenshot?: string;
   isRecording?: boolean;
+  isLoading?: boolean;
   onDownload?: (type: string, screenshot: string) => void;
 }
 
@@ -52,7 +54,7 @@ const deviceConfigs: Record<DeviceFrameProps["type"], DeviceConfig> = {
   },
 };
 
-export const DeviceFrame = ({ type, screenshot, isRecording, onDownload }: DeviceFrameProps) => {
+export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownload }: DeviceFrameProps) => {
   const config = deviceConfigs[type];
 
   const handleDownload = () => {
@@ -92,7 +94,30 @@ export const DeviceFrame = ({ type, screenshot, isRecording, onDownload }: Devic
             background: "#0f0f14",
           }}
         >
-          {screenshot ? (
+          {isLoading ? (
+            <div className="w-full h-full flex flex-col p-3 gap-2 bg-secondary/30">
+              {/* Skeleton header */}
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3 w-3 rounded-full" />
+                <Skeleton className="h-2 w-16" />
+                <Skeleton className="h-2 w-12 ml-auto" />
+              </div>
+              {/* Skeleton nav */}
+              <Skeleton className="h-6 w-full rounded" />
+              {/* Skeleton hero */}
+              <Skeleton className="h-16 w-full rounded flex-shrink-0" />
+              {/* Skeleton content blocks */}
+              <div className="flex gap-2 flex-1">
+                <Skeleton className="h-full w-1/2 rounded" />
+                <Skeleton className="h-full w-1/2 rounded" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-1/3 rounded" />
+                <Skeleton className="h-8 w-1/3 rounded" />
+                <Skeleton className="h-8 w-1/3 rounded" />
+              </div>
+            </div>
+          ) : screenshot ? (
             <img
               src={screenshot}
               alt={`${type} preview`}
