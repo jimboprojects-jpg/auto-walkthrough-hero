@@ -2,12 +2,14 @@ import { motion } from "framer-motion";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DeviceColorTheme, getThemeColors } from "./DeviceColorPicker";
 
 interface DeviceFrameProps {
   type: "mobile" | "tablet" | "laptop" | "desktop";
   screenshot?: string;
   isRecording?: boolean;
   isLoading?: boolean;
+  colorTheme?: DeviceColorTheme;
   onDownload?: (type: string, screenshot: string) => void;
 }
 
@@ -54,8 +56,9 @@ const deviceConfigs: Record<DeviceFrameProps["type"], DeviceConfig> = {
   },
 };
 
-export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownload }: DeviceFrameProps) => {
+export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorTheme = "space-gray", onDownload }: DeviceFrameProps) => {
   const config = deviceConfigs[type];
+  const themeColors = getThemeColors(colorTheme);
 
   const handleDownload = () => {
     if (screenshot && onDownload) {
@@ -78,7 +81,7 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownlo
           height: config.height,
           padding: config.bezel,
           borderRadius: config.borderRadius,
-          background: "linear-gradient(145deg, #2a2a3a 0%, #1a1a24 100%)",
+          background: themeColors.gradient,
         }}
       >
         {/* Notch for mobile */}
@@ -146,7 +149,10 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownlo
 
         {/* Home button for tablet */}
         {type === "tablet" && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full border-2 border-muted" />
+          <div 
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full border-2"
+            style={{ borderColor: themeColors.border }}
+          />
         )}
       </div>
 
@@ -157,7 +163,7 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownlo
           style={{
             width: config.width + 60,
             height: 16,
-            background: "linear-gradient(145deg, #2a2a3a 0%, #1a1a24 100%)",
+            background: themeColors.gradient,
             borderRadius: "0 0 8px 8px",
             marginTop: -4,
           }}
@@ -167,7 +173,7 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownlo
             style={{
               width: 80,
               height: 4,
-              background: "#3a3a4a",
+              background: themeColors.accent,
               borderRadius: "0 0 4px 4px",
             }}
           />
@@ -181,14 +187,14 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, onDownlo
             style={{
               width: 60,
               height: 60,
-              background: "linear-gradient(145deg, #2a2a3a 0%, #1a1a24 100%)",
+              background: themeColors.gradient,
             }}
           />
           <div
             style={{
               width: 120,
               height: 12,
-              background: "linear-gradient(145deg, #2a2a3a 0%, #1a1a24 100%)",
+              background: themeColors.gradient,
               borderRadius: "0 0 6px 6px",
             }}
           />
