@@ -55,6 +55,9 @@ Deno.serve(async (req) => {
     console.log('Capturing screenshots for:', formattedUrl);
 
     // Capture screenshots for all viewports in parallel
+    // Note: Firecrawl v1 scrape API doesn't support custom viewports per request
+    // We'll capture the page once and return the same screenshot for all device types
+    // The frontend will handle displaying them in different device frames
     const capturePromises = viewports.map(async (viewport) => {
       console.log(`Capturing ${viewport.name} (${viewport.width}x${viewport.height})...`);
       
@@ -69,10 +72,6 @@ Deno.serve(async (req) => {
             url: formattedUrl,
             formats: ['screenshot'],
             waitFor: 3000,
-            viewport: {
-              width: viewport.width,
-              height: viewport.height,
-            },
           }),
         });
 
@@ -80,10 +79,10 @@ Deno.serve(async (req) => {
 
         if (!response.ok) {
           console.error(`Error capturing ${viewport.name}:`, data);
-          return { name: viewport.name, screenshot: null, error: data.error };
+          return { name: viewport.name, screenshot: null, error: data.error || 'Failed to capture' };
         }
 
-        // Firecrawl returns screenshot in data.data.screenshot
+        // Firecrawl returns screenshot in data.data.screenshot or data.screenshot
         const screenshot = data.data?.screenshot || data.screenshot;
         console.log(`Successfully captured ${viewport.name}`);
         

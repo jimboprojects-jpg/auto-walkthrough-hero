@@ -1,9 +1,12 @@
 import { motion } from "framer-motion";
+import { Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface DeviceFrameProps {
   type: "mobile" | "tablet" | "laptop" | "desktop";
   screenshot?: string;
   isRecording?: boolean;
+  onDownload?: (type: string, screenshot: string) => void;
 }
 
 type DeviceConfig = {
@@ -49,8 +52,14 @@ const deviceConfigs: Record<DeviceFrameProps["type"], DeviceConfig> = {
   },
 };
 
-export const DeviceFrame = ({ type, screenshot, isRecording }: DeviceFrameProps) => {
+export const DeviceFrame = ({ type, screenshot, isRecording, onDownload }: DeviceFrameProps) => {
   const config = deviceConfigs[type];
+
+  const handleDownload = () => {
+    if (screenshot && onDownload) {
+      onDownload(type, screenshot);
+    }
+  };
 
   return (
     <motion.div
@@ -161,9 +170,20 @@ export const DeviceFrame = ({ type, screenshot, isRecording }: DeviceFrameProps)
         </div>
       )}
 
-      {/* Device label */}
-      <div className="text-center mt-4">
+      {/* Device label and download button */}
+      <div className="flex items-center justify-center gap-2 mt-4">
         <span className="text-sm font-medium text-muted-foreground capitalize">{type}</span>
+        {screenshot && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 rounded-full hover:bg-primary/10"
+            onClick={handleDownload}
+            title={`Download ${type} screenshot`}
+          >
+            <Download className="h-3 w-3" />
+          </Button>
+        )}
       </div>
     </motion.div>
   );
