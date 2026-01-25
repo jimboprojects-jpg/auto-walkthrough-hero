@@ -1,18 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Video, Globe, Sparkles, Layers, Zap } from "lucide-react";
 import { Header } from "@/components/Header";
 import { UrlInput } from "@/components/UrlInput";
-import { MockupPreview } from "@/components/MockupPreview";
+import { MockupPreview, MockupPreviewHandle } from "@/components/MockupPreview";
 import { RecordingControls } from "@/components/RecordingControls";
 import { ProgressBar } from "@/components/ProgressBar";
 import { FeatureCard } from "@/components/FeatureCard";
 import { BackgroundEffects } from "@/components/BackgroundEffects";
 import { useToast } from "@/hooks/use-toast";
 import { captureScreenshots } from "@/lib/api/screenshots";
+import { autoNavigate } from "@/lib/api/navigation";
 
 const Index = () => {
   const { toast } = useToast();
+  const mockupPreviewRef = useRef<MockupPreviewHandle>(null);
+  
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -28,6 +31,8 @@ const Index = () => {
     laptop?: string;
     desktop?: string;
   }>({});
+  const [navigationFrames, setNavigationFrames] = useState<string[]>([]);
+  const [recordedVideos, setRecordedVideos] = useState<Record<string, Blob>>({});
 
   // Recording timer
   useEffect(() => {
@@ -45,9 +50,11 @@ const Index = () => {
     setIsLoading(true);
     setHasSubmitted(true);
     setProgress(0);
-    setStatus("Initializing Firecrawl capture...");
+    setStatus("Initializing capture...");
     setScreenshots({});
     setSiteMetadata(null);
+    setNavigationFrames([]);
+    setRecordedVideos({});
 
     // Start progress animation
     const progressInterval = setInterval(() => {
@@ -56,41 +63,60 @@ const Index = () => {
           clearInterval(progressInterval);
           return 90;
         }
-        return prev + 5;
+        return prev + 3;
       });
-    }, 500);
-
-    setStatus("Capturing screenshots across all devices...");
+    }, 800);
 
     try {
-      const result = await captureScreenshots(submittedUrl);
+      // First, capture initial screenshots for all devices
+      setStatus("Capturing initial screenshots...");
+      const screenshotResult = await captureScreenshots(submittedUrl);
+      
+      if (screenshotResult.success && screenshotResult.screenshots) {
+        setScreenshots(screenshotResult.screenshots);
+        
+        if (screenshotResult.metadata) {
+          setSiteMetadata({
+            title: screenshotResult.metadata.title,
+            description: screenshotResult.metadata.description,
+          });
+        }
+      }
+
+      // Then, auto-navigate to capture multiple pages
+      setStatus("Auto-navigating website...");
+      const navResult = await autoNavigate(submittedUrl, 5);
       
       clearInterval(progressInterval);
       
-      if (result.success && result.screenshots) {
+      if (navResult.success && navResult.pages && navResult.pages.length > 0) {
+        // Extract screenshots from navigation for animation
+        const frames = navResult.pages
+          .filter(page => page.screenshot)
+          .map(page => page.screenshot as string);
+        
+        setNavigationFrames(frames);
         setProgress(100);
         setStatus("Capture complete!");
-        setScreenshots(result.screenshots);
-        
-        if (result.metadata) {
-          setSiteMetadata({
-            title: result.metadata.title,
-            description: result.metadata.description,
-          });
-        }
         
         toast({
+          title: "Website captured!",
+          description: `Captured ${frames.length} pages. Click "Start Recording" to create your video mockup.`,
+        });
+      } else if (screenshotResult.success) {
+        // Fallback to just screenshots if navigation failed
+        setProgress(100);
+        setStatus("Capture complete!");
+        toast({
           title: "Screenshots captured!",
-          description: result.metadata?.title 
-            ? `Captured: ${result.metadata.title}` 
-            : "You can now start recording the navigation video.",
+          description: "Click 'Record Video' to create your video mockup with device frames.",
         });
       } else {
         setProgress(0);
         setStatus("Capture failed");
         toast({
           title: "Capture failed",
-          description: result.error || "Failed to capture screenshots. Please try again.",
+          description: navResult.error || "Failed to capture website. Please try again.",
           variant: "destructive",
         });
       }
@@ -111,9 +137,14 @@ const Index = () => {
   const handleStartRecording = () => {
     setIsRecording(true);
     setIsPaused(false);
+    setDuration(0);
+    
+    // Start video recording on mockup preview
+    mockupPreviewRef.current?.startVideoRecording();
+    
     toast({
       title: "Recording started",
-      description: "Navigate through your website to capture the video.",
+      description: "Recording device mockups with navigation animation...",
     });
   };
 
@@ -121,36 +152,54 @@ const Index = () => {
     setIsPaused(!isPaused);
   };
 
-  const handleStopRecording = () => {
+  const handleStopRecording = async () => {
     setIsRecording(false);
     setIsPaused(false);
-    toast({
-      title: "Recording stopped",
-      description: `Video captured: ${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
-    });
+    
+    // Stop video recording and get videos
+    const videos = await mockupPreviewRef.current?.stopVideoRecording();
+    
+    if (videos && Object.keys(videos).length > 0) {
+      setRecordedVideos(videos);
+      toast({
+        title: "Recording complete!",
+        description: `Recorded ${Object.keys(videos).length} device videos. Duration: ${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
+      });
+    } else {
+      toast({
+        title: "Recording stopped",
+        description: "No video was captured. Try recording again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleResetRecording = () => {
     setDuration(0);
     setIsRecording(false);
     setIsPaused(false);
+    setRecordedVideos({});
+  };
+
+  const handleRecordingComplete = (videos: Record<string, Blob>) => {
+    setRecordedVideos(videos);
   };
 
   const features = [
     {
       icon: Globe,
-      title: "Automatic Navigation",
-      description: "Our AI navigates through your website, capturing every interaction and transition.",
+      title: "Auto Navigation",
+      description: "Our AI navigates through your website, capturing every page and transition automatically.",
     },
     {
       icon: Layers,
       title: "Multi-Device Capture",
-      description: "Generate mockups for mobile, tablet, laptop, and desktop simultaneously.",
+      description: "Generate video mockups for mobile, tablet, laptop, and desktop simultaneously.",
     },
     {
       icon: Video,
-      title: "HD Video Export",
-      description: "Export stunning HD videos perfect for presentations and marketing.",
+      title: "Video Export",
+      description: "Export videos with device frames included, perfect for presentations and marketing.",
     },
     {
       icon: Zap,
@@ -191,7 +240,7 @@ const Index = () => {
           
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
             Automatically capture and record your website's navigation, generating professional
-            video mockups across all device types in minutes.
+            video mockups with device frames across all device types.
           </p>
         </motion.section>
 
@@ -236,6 +285,11 @@ const Index = () => {
                           {siteMetadata.description}
                         </p>
                       )}
+                      {navigationFrames.length > 0 && (
+                        <p className="text-xs text-primary mt-2">
+                          {navigationFrames.length} pages captured for navigation
+                        </p>
+                      )}
                     </motion.div>
                   )}
                   <RecordingControls
@@ -251,7 +305,14 @@ const Index = () => {
               )}
 
               <section className="mb-16">
-                <MockupPreview screenshots={screenshots} isRecording={isRecording} isLoading={isLoading} />
+                <MockupPreview
+                  ref={mockupPreviewRef}
+                  screenshots={screenshots}
+                  navigationFrames={navigationFrames}
+                  isRecording={isRecording}
+                  isLoading={isLoading}
+                  onRecordingComplete={handleRecordingComplete}
+                />
               </section>
             </motion.div>
           )}
@@ -267,7 +328,7 @@ const Index = () => {
           >
             <div className="text-center mb-12">
               <h2 className="text-2xl font-semibold mb-2">How It Works</h2>
-              <p className="text-muted-foreground">Generate professional mockup videos in four simple steps</p>
+              <p className="text-muted-foreground">Generate professional video mockups in four simple steps</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
