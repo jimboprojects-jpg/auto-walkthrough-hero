@@ -2,9 +2,20 @@ import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "re
 import { motion, AnimatePresence } from "framer-motion";
 import { DeviceFrame } from "./DeviceFrame";
 import { DeviceColorPicker, DeviceColorTheme } from "./DeviceColorPicker";
-import { Download, Layers, Video, StopCircle } from "lucide-react";
+import { VideoFormatSelector, VideoFormat } from "./VideoFormatSelector";
+import { Download, Layers, Video, StopCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { convertWebMToMP4, isFFmpegSupported } from "@/lib/videoConverter";
 
 interface MockupPreviewProps {
   screenshots: {
@@ -31,6 +42,9 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
     const [isVideoRecording, setIsVideoRecording] = useState(false);
     const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
     const [recordedVideos, setRecordedVideos] = useState<Record<string, Blob>>({});
+    const [isConvertingAll, setIsConvertingAll] = useState(false);
+    const [conversionProgress, setConversionProgress] = useState(0);
+    const [selectedFormat, setSelectedFormat] = useState<VideoFormat>("webm");
 
     const deviceRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const mediaRecordersRef = useRef<Record<string, MediaRecorder>>({});
@@ -191,11 +205,32 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
       stopVideoRecording,
     }));
 
-    const downloadVideo = async (type: string, blob: Blob) => {
-      const url = URL.createObjectURL(blob);
+    const downloadVideo = async (type: string, blob: Blob, format: VideoFormat = "webm") => {
+      let downloadBlob = blob;
+      let extension = "webm";
+
+      if (format === "mp4") {
+        try {
+          toast({
+            title: "Converting to MP4...",
+            description: `Converting ${type} video...`,
+          });
+          downloadBlob = await convertWebMToMP4(blob);
+          extension = "mp4";
+        } catch (error) {
+          console.error("Conversion failed:", error);
+          toast({
+            title: "Conversion failed",
+            description: "Downloading as WebM instead.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      const url = URL.createObjectURL(downloadBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `mockup-${type}-${colorTheme}.webm`;
+      a.download = `mockup-${type}-${colorTheme}.${extension}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -203,11 +238,11 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
 
       toast({
         title: "Download started",
-        description: `${type.charAt(0).toUpperCase() + type.slice(1)} video downloading...`,
+        description: `${type.charAt(0).toUpperCase() + type.slice(1)} video downloading as ${extension.toUpperCase()}...`,
       });
     };
 
-    const downloadAllVideos = async () => {
+    const downloadAllVideos = async (format: VideoFormat = "webm") => {
       const videos = Object.entries(recordedVideos);
       if (videos.length === 0) {
         toast({
@@ -218,16 +253,34 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
         return;
       }
 
-      for (const [type, blob] of videos) {
-        await downloadVideo(type, blob);
-        // Small delay between downloads
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      if (format === "mp4" && !isFFmpegSupported()) {
+        toast({
+          title: "MP4 not supported",
+          description: "Your browser doesn't support MP4 conversion. Downloading as WebM.",
+          variant: "destructive",
+        });
+        format = "webm";
       }
 
-      toast({
-        title: "All downloads complete",
-        description: `Downloaded ${videos.length} video(s).`,
-      });
+      setIsConvertingAll(format === "mp4");
+      
+      try {
+        for (let i = 0; i < videos.length; i++) {
+          const [type, blob] = videos[i];
+          setConversionProgress(Math.round(((i) / videos.length) * 100));
+          await downloadVideo(type, blob, format);
+          // Small delay between downloads
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        toast({
+          title: "All downloads complete",
+          description: `Downloaded ${videos.length} video(s) as ${format.toUpperCase()}.`,
+        });
+      } finally {
+        setIsConvertingAll(false);
+        setConversionProgress(0);
+      }
     };
 
     const hasAnyScreenshots = Object.values(screenshots).some(
@@ -303,15 +356,49 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
                     </Button>
                   )}
 
-                  <Button
-                    variant="outline"
-                    className="rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10"
-                    onClick={downloadAllVideos}
-                    disabled={!hasRecordedVideos}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Videos
-                  </Button>
+                  {isConvertingAll ? (
+                    <div className="flex items-center gap-3 glass px-4 py-2 rounded-xl">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <div className="flex flex-col gap-1 min-w-[100px]">
+                        <span className="text-xs text-muted-foreground">Converting...</span>
+                        <Progress value={conversionProgress} className="h-1.5" />
+                      </div>
+                    </div>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10"
+                          disabled={!hasRecordedVideos}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download All
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Choose Format</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => downloadAllVideos("webm")}
+                          className="cursor-pointer"
+                        >
+                          <span>WebM</span>
+                          <span className="ml-auto text-xs text-muted-foreground">Fast</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => downloadAllVideos("mp4")}
+                          disabled={!isFFmpegSupported()}
+                          className="cursor-pointer"
+                        >
+                          <span>MP4</span>
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {isFFmpegSupported() ? "Universal" : "Not supported"}
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
