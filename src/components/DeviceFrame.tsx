@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Download } from "lucide-react";
+import { Download, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeviceColorTheme, getThemeColors } from "./DeviceColorPicker";
@@ -10,7 +10,8 @@ interface DeviceFrameProps {
   isRecording?: boolean;
   isLoading?: boolean;
   colorTheme?: DeviceColorTheme;
-  onDownload?: (type: string, screenshot: string) => void;
+  onDownload?: () => void;
+  hasVideo?: boolean;
 }
 
 type DeviceConfig = {
@@ -56,13 +57,13 @@ const deviceConfigs: Record<DeviceFrameProps["type"], DeviceConfig> = {
   },
 };
 
-export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorTheme = "space-gray", onDownload }: DeviceFrameProps) => {
+export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorTheme = "space-gray", onDownload, hasVideo }: DeviceFrameProps) => {
   const config = deviceConfigs[type];
   const themeColors = getThemeColors(colorTheme);
 
   const handleDownload = () => {
-    if (screenshot && onDownload) {
-      onDownload(type, screenshot);
+    if (onDownload) {
+      onDownload();
     }
   };
 
@@ -204,15 +205,15 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorThe
       {/* Device label and download button */}
       <div className="flex items-center justify-center gap-2 mt-4">
         <span className="text-sm font-medium text-muted-foreground capitalize">{type}</span>
-        {screenshot && (
+        {(hasVideo || screenshot) && onDownload && (
           <Button
             variant="ghost"
             size="icon"
             className="h-6 w-6 rounded-full hover:bg-primary/10"
             onClick={handleDownload}
-            title={`Download ${type} screenshot`}
+            title={hasVideo ? `Download ${type} video` : `Download ${type} screenshot`}
           >
-            <Download className="h-3 w-3" />
+            {hasVideo ? <Video className="h-3 w-3" /> : <Download className="h-3 w-3" />}
           </Button>
         )}
       </div>
