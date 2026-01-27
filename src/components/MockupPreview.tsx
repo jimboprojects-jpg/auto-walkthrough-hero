@@ -2,11 +2,12 @@ import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "re
 import { motion, AnimatePresence } from "framer-motion";
 import { DeviceFrame } from "./DeviceFrame";
 import { DeviceColorPicker, DeviceColorTheme } from "./DeviceColorPicker";
+import { VideoPreviewModal } from "./VideoPreviewModal";
 import { Download, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { convertWebMToMP4, isFFmpegSupported } from "@/lib/videoConverter";
+import { convertWebMToMP4, isFFmpegSupported, getBestVideoFormat } from "@/lib/videoConverter";
 
 interface MockupPreviewProps {
   screenshots: {
@@ -35,6 +36,9 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
     const [recordedVideos, setRecordedVideos] = useState<Record<string, Blob>>({});
     const [isConvertingAll, setIsConvertingAll] = useState(false);
     const [conversionProgress, setConversionProgress] = useState(0);
+    
+    // Video preview modal state
+    const [previewDevice, setPreviewDevice] = useState<"mobile" | "tablet" | "laptop" | "desktop" | null>(null);
 
     const deviceRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const mediaRecordersRef = useRef<Record<string, MediaRecorder>>({});
@@ -217,34 +221,30 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
       stopVideoRecording,
     }));
 
-    // Auto-convert to MP4 and download
+    // Download video with MP4 conversion or WebM fallback
     const downloadVideo = async (type: string, blob: Blob) => {
+      const format = getBestVideoFormat();
       let downloadBlob = blob;
-      let extension = "mp4";
+      let extension = format.extension;
 
-      if (isFFmpegSupported()) {
+      if (format.canConvertToMP4) {
         try {
           toast({
             title: "Converting to MP4...",
             description: `Converting ${type} video...`,
           });
           downloadBlob = await convertWebMToMP4(blob);
+          extension = "mp4";
         } catch (error) {
-          console.error("Conversion failed:", error);
+          console.error("Conversion failed, falling back to WebM:", error);
+          // Fall back to WebM
+          extension = "webm";
+          downloadBlob = blob;
           toast({
-            title: "Conversion failed",
-            description: "Could not convert to MP4. Please try again.",
-            variant: "destructive",
+            title: "Using WebM format",
+            description: "MP4 conversion unavailable, downloading as WebM.",
           });
-          return;
         }
-      } else {
-        toast({
-          title: "MP4 conversion not available",
-          description: "Your browser doesn't support MP4 conversion.",
-          variant: "destructive",
-        });
-        return;
       }
 
       const url = URL.createObjectURL(downloadBlob);
@@ -258,8 +258,15 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
 
       toast({
         title: "Download started",
-        description: `${type.charAt(0).toUpperCase() + type.slice(1)} video downloading as MP4...`,
+        description: `${type.charAt(0).toUpperCase() + type.slice(1)} video downloading as ${extension.toUpperCase()}...`,
       });
+    };
+
+    // Open video preview modal
+    const openVideoPreview = (type: "mobile" | "tablet" | "laptop" | "desktop") => {
+      if (recordedVideos[type]) {
+        setPreviewDevice(type);
+      }
     };
 
     const downloadAllVideos = async () => {
@@ -273,14 +280,7 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
         return;
       }
 
-      if (!isFFmpegSupported()) {
-        toast({
-          title: "MP4 conversion not available",
-          description: "Your browser doesn't support MP4 conversion. Try Chrome or Firefox.",
-          variant: "destructive",
-        });
-        return;
-      }
+      const format = getBestVideoFormat();
 
       setIsConvertingAll(true);
       setConversionProgress(0);
@@ -297,7 +297,7 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
 
         toast({
           title: "All downloads complete",
-          description: `Downloaded ${videos.length} video(s) as MP4.`,
+          description: `Downloaded ${videos.length} video(s) as ${format.canConvertToMP4 ? "MP4" : "WebM"}.`,
         });
       } catch (error) {
         console.error("Download error:", error);
@@ -354,7 +354,7 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
                   onClick={downloadAllVideos}
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Download All (MP4)
+                  Download All {isFFmpegSupported() ? "(MP4)" : "(Video)"}
                 </Button>
               )
             )}
@@ -378,7 +378,7 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
                 colorTheme={colorTheme}
                 onDownload={
                   recordedVideos[type]
-                    ? () => downloadVideo(type, recordedVideos[type])
+                    ? () => openVideoPreview(type)
                     : undefined
                 }
                 hasVideo={!!recordedVideos[type]}
@@ -411,6 +411,15 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
             </div>
           </motion.div>
         )}
+
+        {/* Video Preview Modal */}
+        <VideoPreviewModal
+          isOpen={previewDevice !== null}
+          onClose={() => setPreviewDevice(null)}
+          videoBlob={previewDevice ? recordedVideos[previewDevice] : null}
+          deviceType={previewDevice || "mobile"}
+          colorTheme={colorTheme}
+        />
       </motion.div>
     );
   }
