@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Download, Video } from "lucide-react";
+import { Play, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeviceColorTheme, getThemeColors } from "./DeviceColorPicker";
@@ -211,9 +211,9 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorThe
             size="icon"
             className="h-6 w-6 rounded-full hover:bg-primary/10"
             onClick={handleDownload}
-            title={hasVideo ? `Download ${type} video` : `Download ${type} screenshot`}
+            title={hasVideo ? `Preview ${type} video` : `Download ${type} screenshot`}
           >
-            {hasVideo ? <Video className="h-3 w-3" /> : <Download className="h-3 w-3" />}
+            {hasVideo ? <Play className="h-3 w-3" /> : <Download className="h-3 w-3" />}
           </Button>
         )}
       </div>

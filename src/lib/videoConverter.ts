@@ -80,3 +80,15 @@ export const isFFmpegSupported = (): boolean => {
   // Check if SharedArrayBuffer is available (required for FFmpeg.wasm)
   return typeof SharedArrayBuffer !== "undefined";
 };
+
+// Get the best available video format for download
+export const getBestVideoFormat = (): { extension: string; mimeType: string; canConvertToMP4: boolean } => {
+  const canConvertToMP4 = isFFmpegSupported();
+  
+  if (canConvertToMP4) {
+    return { extension: "mp4", mimeType: "video/mp4", canConvertToMP4: true };
+  }
+  
+  // Fallback to WebM which is widely supported
+  return { extension: "webm", mimeType: "video/webm", canConvertToMP4: false };
+};
