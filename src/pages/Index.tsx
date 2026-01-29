@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Video, Globe, Sparkles, Layers, Zap } from "lucide-react";
+import { Globe, Sparkles, Layers, Zap, Camera } from "lucide-react";
 import { Header } from "@/components/Header";
 import { UrlInput } from "@/components/UrlInput";
 import { MockupPreview, MockupPreviewHandle } from "@/components/MockupPreview";
-import { RecordingControls } from "@/components/RecordingControls";
+import { SnapshotControls } from "@/components/SnapshotControls";
 import { ProgressBar } from "@/components/ProgressBar";
 import { FeatureCard } from "@/components/FeatureCard";
 import { BackgroundEffects } from "@/components/BackgroundEffects";
@@ -18,9 +18,7 @@ const Index = () => {
   
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [duration, setDuration] = useState(0);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -32,18 +30,7 @@ const Index = () => {
     desktop?: string;
   }>({});
   const [navigationFrames, setNavigationFrames] = useState<string[]>([]);
-  const [recordedVideos, setRecordedVideos] = useState<Record<string, Blob>>({});
-
-  // Recording timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording && !isPaused) {
-      interval = setInterval(() => {
-        setDuration((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording, isPaused]);
+  const [capturedSnapshots, setCapturedSnapshots] = useState<Record<string, string>>({});
 
   const handleSubmit = useCallback(async (submittedUrl: string) => {
     setUrl(submittedUrl);
@@ -54,7 +41,7 @@ const Index = () => {
     setScreenshots({});
     setSiteMetadata(null);
     setNavigationFrames([]);
-    setRecordedVideos({});
+    setCapturedSnapshots({});
 
     // Start progress animation
     const progressInterval = setInterval(() => {
@@ -90,7 +77,7 @@ const Index = () => {
       clearInterval(progressInterval);
       
       if (navResult.success && navResult.pages && navResult.pages.length > 0) {
-        // Extract screenshots from navigation for animation
+        // Extract screenshots from navigation for display
         const frames = navResult.pages
           .filter(page => page.screenshot)
           .map(page => page.screenshot as string);
@@ -101,7 +88,7 @@ const Index = () => {
         
         toast({
           title: "Website captured!",
-          description: `Captured ${frames.length} pages. Click "Start Recording" to create your video mockup.`,
+          description: `Captured ${frames.length} pages. Click "Capture Snapshots" to create your device mockups.`,
         });
       } else if (screenshotResult.success) {
         // Fallback to just screenshots if navigation failed
@@ -109,7 +96,7 @@ const Index = () => {
         setStatus("Capture complete!");
         toast({
           title: "Screenshots captured!",
-          description: "Click 'Record Video' to create your video mockup with device frames.",
+          description: "Click 'Capture Snapshots' to create PNG mockups with device frames.",
         });
       } else {
         setProgress(0);
@@ -134,55 +121,38 @@ const Index = () => {
     setIsLoading(false);
   }, [toast]);
 
-  const handleStartRecording = () => {
-    setIsRecording(true);
-    setIsPaused(false);
-    setDuration(0);
+  const handleCaptureSnapshots = async () => {
+    setIsCapturing(true);
     
-    // Start video recording on mockup preview
-    mockupPreviewRef.current?.startVideoRecording();
-    
-    toast({
-      title: "Recording started",
-      description: "Recording device mockups with navigation animation...",
-    });
-  };
-
-  const handlePauseRecording = () => {
-    setIsPaused(!isPaused);
-  };
-
-  const handleStopRecording = async () => {
-    setIsRecording(false);
-    setIsPaused(false);
-    
-    // Stop video recording and get videos
-    const videos = await mockupPreviewRef.current?.stopVideoRecording();
-    
-    if (videos && Object.keys(videos).length > 0) {
-      setRecordedVideos(videos);
+    try {
+      const snapshots = await mockupPreviewRef.current?.captureSnapshots();
+      
+      if (snapshots && Object.keys(snapshots).length > 0) {
+        setCapturedSnapshots(snapshots);
+        toast({
+          title: "Snapshots captured!",
+          description: `Captured ${Object.keys(snapshots).length} device mockups as PNG. Click preview to view or download.`,
+        });
+      } else {
+        toast({
+          title: "Capture failed",
+          description: "No snapshots were captured. Try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       toast({
-        title: "Recording complete!",
-        description: `Recorded ${Object.keys(videos).length} device videos. Duration: ${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`,
-      });
-    } else {
-      toast({
-        title: "Recording stopped",
-        description: "No video was captured. Try recording again.",
+        title: "Error",
+        description: "Failed to capture snapshots. Please try again.",
         variant: "destructive",
       });
     }
+
+    setIsCapturing(false);
   };
 
-  const handleResetRecording = () => {
-    setDuration(0);
-    setIsRecording(false);
-    setIsPaused(false);
-    setRecordedVideos({});
-  };
-
-  const handleRecordingComplete = (videos: Record<string, Blob>) => {
-    setRecordedVideos(videos);
+  const handleSnapshotComplete = (snapshots: Record<string, string>) => {
+    setCapturedSnapshots(snapshots);
   };
 
   const features = [
@@ -194,12 +164,12 @@ const Index = () => {
     {
       icon: Layers,
       title: "Multi-Device Capture",
-      description: "Generate video mockups for mobile, tablet, laptop, and desktop simultaneously.",
+      description: "Generate PNG mockups for mobile, tablet, laptop, and desktop simultaneously.",
     },
     {
-      icon: Video,
-      title: "Video Export",
-      description: "Export videos with device frames included, perfect for presentations and marketing.",
+      icon: Camera,
+      title: "PNG Export",
+      description: "Export high-quality PNG snapshots with device frames, perfect for presentations and marketing.",
     },
     {
       icon: Zap,
@@ -229,18 +199,18 @@ const Index = () => {
             className="inline-flex items-center gap-2 glass px-4 py-2 rounded-full mb-6"
           >
             <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm text-muted-foreground">AI-Powered Video Generation</span>
+            <span className="text-sm text-muted-foreground">AI-Powered Screenshot Generation</span>
           </motion.div>
           
           <h1 className="text-4xl md:text-6xl font-bold mb-4 tracking-tight">
             Turn Your Website Into
             <br />
-            <span className="gradient-text">Stunning Video Mockups</span>
+            <span className="gradient-text">Stunning Device Mockups</span>
           </h1>
           
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Automatically capture and record your website's navigation, generating professional
-            video mockups with device frames across all device types.
+            Automatically capture your website across devices, generating professional
+            PNG mockups with device frames for all device types.
           </p>
         </motion.section>
 
@@ -263,7 +233,7 @@ const Index = () => {
           )}
         </AnimatePresence>
 
-        {/* Recording Controls & Mockups */}
+        {/* Snapshot Controls & Mockups */}
         <AnimatePresence>
           {hasSubmitted && (
             <motion.div
@@ -287,19 +257,14 @@ const Index = () => {
                       )}
                       {navigationFrames.length > 0 && (
                         <p className="text-xs text-primary mt-2">
-                          {navigationFrames.length} pages captured for navigation
+                          {navigationFrames.length} pages captured
                         </p>
                       )}
                     </motion.div>
                   )}
-                  <RecordingControls
-                    isRecording={isRecording}
-                    isPaused={isPaused}
-                    duration={duration}
-                    onStart={handleStartRecording}
-                    onPause={handlePauseRecording}
-                    onStop={handleStopRecording}
-                    onReset={handleResetRecording}
+                  <SnapshotControls
+                    isCapturing={isCapturing}
+                    onCapture={handleCaptureSnapshots}
                   />
                 </section>
               )}
@@ -309,9 +274,9 @@ const Index = () => {
                   ref={mockupPreviewRef}
                   screenshots={screenshots}
                   navigationFrames={navigationFrames}
-                  isRecording={isRecording}
+                  isCapturing={isCapturing}
                   isLoading={isLoading}
-                  onRecordingComplete={handleRecordingComplete}
+                  onCaptureComplete={handleSnapshotComplete}
                 />
               </section>
             </motion.div>
@@ -328,7 +293,7 @@ const Index = () => {
           >
             <div className="text-center mb-12">
               <h2 className="text-2xl font-semibold mb-2">How It Works</h2>
-              <p className="text-muted-foreground">Generate professional video mockups in four simple steps</p>
+              <p className="text-muted-foreground">Generate professional device mockups in four simple steps</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -348,7 +313,7 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="relative z-10 py-8 text-center text-sm text-muted-foreground border-t border-border/50">
-        <p>© 2024 MockupVid. Generate beautiful website video mockups.</p>
+        <p>© 2024 MockupVid. Generate beautiful website device mockups.</p>
       </footer>
     </div>
   );
