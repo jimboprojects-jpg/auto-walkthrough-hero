@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useRef, forwardRef, useImperativeHandle } from "react";
+import { motion } from "framer-motion";
 import { DeviceFrame } from "./DeviceFrame";
 import { DeviceColorPicker, DeviceColorTheme } from "./DeviceColorPicker";
-import { VideoPreviewModal } from "./VideoPreviewModal";
+import { ImagePreviewModal } from "./ImagePreviewModal";
 import { Download, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { convertWebMToMP4, isFFmpegSupported, getBestVideoFormat } from "@/lib/videoConverter";
+import html2canvas from "html2canvas";
+import JSZip from "jszip";
 
 interface MockupPreviewProps {
   screenshots: {
@@ -17,302 +18,140 @@ interface MockupPreviewProps {
     desktop?: string;
   };
   navigationFrames?: string[];
-  isRecording?: boolean;
+  isCapturing?: boolean;
   isLoading?: boolean;
-  onRecordingComplete?: (videos: Record<string, Blob>) => void;
+  onCaptureComplete?: (snapshots: Record<string, string>) => void;
 }
 
 export interface MockupPreviewHandle {
-  startVideoRecording: () => void;
-  stopVideoRecording: () => Promise<Record<string, Blob>>;
+  captureSnapshots: () => Promise<Record<string, string>>;
 }
 
 export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>(
-  ({ screenshots, navigationFrames = [], isRecording, isLoading, onRecordingComplete }, ref) => {
+  ({ screenshots, navigationFrames = [], isCapturing, isLoading, onCaptureComplete }, ref) => {
     const { toast } = useToast();
     const [colorTheme, setColorTheme] = useState<DeviceColorTheme>("space-gray");
-    const [isVideoRecording, setIsVideoRecording] = useState(false);
-    const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
-    const [recordedVideos, setRecordedVideos] = useState<Record<string, Blob>>({});
-    const [isConvertingAll, setIsConvertingAll] = useState(false);
-    const [conversionProgress, setConversionProgress] = useState(0);
-    
-    // Video preview modal state
+    const [capturedSnapshots, setCapturedSnapshots] = useState<Record<string, string>>({});
+    const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+    const [downloadProgress, setDownloadProgress] = useState(0);
+
+    // Image preview modal state
     const [previewDevice, setPreviewDevice] = useState<"mobile" | "tablet" | "laptop" | "desktop" | null>(null);
 
     const deviceRefs = useRef<Record<string, HTMLDivElement | null>>({});
-    const mediaRecordersRef = useRef<Record<string, MediaRecorder>>({});
-    const chunksRef = useRef<Record<string, Blob[]>>({});
-    const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const frameCapturingRef = useRef<boolean>(false);
-    const captureIntervalsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
-    // Animation through navigation frames - synchronized with video capture
-    useEffect(() => {
-      if (isVideoRecording && navigationFrames.length > 1) {
-        // Change frame every 3 seconds to give time for proper capture
-        animationIntervalRef.current = setInterval(() => {
-          setCurrentFrameIndex((prev) => {
-            const nextIndex = prev + 1;
-            if (nextIndex >= navigationFrames.length) {
-              return 0; // Loop back
-            }
-            return nextIndex;
-          });
-        }, 3000);
-
-        return () => {
-          if (animationIntervalRef.current) {
-            clearInterval(animationIntervalRef.current);
-          }
-        };
-      }
-    }, [isVideoRecording, navigationFrames.length]);
-
-    // Get current screenshot based on navigation frames or static screenshots
-    const getCurrentScreenshot = (type: string) => {
-      if (navigationFrames.length > 0 && (isVideoRecording || isRecording)) {
-        return navigationFrames[currentFrameIndex];
-      }
-      return screenshots[type as keyof typeof screenshots];
-    };
-
-    const startVideoRecording = async () => {
+    const captureSnapshots = async (): Promise<Record<string, string>> => {
       const deviceTypes = ["mobile", "tablet", "laptop", "desktop"];
-      chunksRef.current = {};
-      mediaRecordersRef.current = {};
-      captureIntervalsRef.current = {};
-      frameCapturingRef.current = true;
+      const snapshots: Record<string, string> = {};
 
-      // Start recording for each device
       for (const type of deviceTypes) {
         const element = deviceRefs.current[type];
         if (!element) continue;
 
         try {
-          // Create a canvas to capture the device frame
-          const canvas = document.createElement("canvas");
-          const rect = element.getBoundingClientRect();
-          canvas.width = Math.max(rect.width * 2, 640);
-          canvas.height = Math.max(rect.height * 2, 480);
-
-          chunksRef.current[type] = [];
-
-          const ctx = canvas.getContext("2d");
-
-          // Capture frames using html2canvas
-          const captureFrame = async () => {
-            if (!frameCapturingRef.current) return;
-            
-            try {
-              const html2canvas = (await import("html2canvas")).default;
-              const capturedCanvas = await html2canvas(element, {
-                backgroundColor: null,
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                allowTaint: true,
-              });
-
-              if (ctx && frameCapturingRef.current) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(capturedCanvas, 0, 0, canvas.width, canvas.height);
-              }
-            } catch (error) {
-              console.error(`Frame capture error for ${type}:`, error);
-            }
-          };
-
-          // Initial capture
-          await captureFrame();
-
-          // Get stream from canvas
-          const stream = canvas.captureStream(30);
-          
-          // Try VP9 first, fall back to VP8
-          let mimeType = "video/webm;codecs=vp9";
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = "video/webm;codecs=vp8";
-          }
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = "video/webm";
-          }
-
-          const mediaRecorder = new MediaRecorder(stream, {
-            mimeType,
-            videoBitsPerSecond: 5000000,
+          const canvas = await html2canvas(element, {
+            backgroundColor: null,
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
           });
 
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              chunksRef.current[type].push(event.data);
-            }
-          };
-
-          mediaRecordersRef.current[type] = mediaRecorder;
-          mediaRecorder.start(100);
-
-          // Continuous frame capture every 150ms
-          captureIntervalsRef.current[type] = setInterval(captureFrame, 150);
+          snapshots[type] = canvas.toDataURL("image/png");
         } catch (error) {
-          console.error(`Error setting up recording for ${type}:`, error);
+          console.error(`Snapshot capture error for ${type}:`, error);
         }
       }
 
-      setIsVideoRecording(true);
-      setCurrentFrameIndex(0);
-    };
-
-    const stopVideoRecording = async (): Promise<Record<string, Blob>> => {
-      frameCapturingRef.current = false;
-
-      // Clear all capture intervals
-      Object.values(captureIntervalsRef.current).forEach(clearInterval);
-      captureIntervalsRef.current = {};
-
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current);
-        animationIntervalRef.current = null;
-      }
-
-      return new Promise((resolve) => {
-        const videos: Record<string, Blob> = {};
-        const recorders = Object.entries(mediaRecordersRef.current);
-        let completedCount = 0;
-
-        if (recorders.length === 0) {
-          setIsVideoRecording(false);
-          resolve({});
-          return;
-        }
-
-        for (const [type, recorder] of recorders) {
-          recorder.onstop = () => {
-            const chunks = chunksRef.current[type] || [];
-            if (chunks.length > 0) {
-              videos[type] = new Blob(chunks, { type: "video/webm" });
-            }
-            completedCount++;
-
-            if (completedCount === recorders.length) {
-              setRecordedVideos(videos);
-              setIsVideoRecording(false);
-              onRecordingComplete?.(videos);
-              resolve(videos);
-            }
-          };
-
-          if (recorder.state !== "inactive") {
-            recorder.stop();
-          } else {
-            completedCount++;
-            if (completedCount === recorders.length) {
-              setRecordedVideos(videos);
-              setIsVideoRecording(false);
-              resolve(videos);
-            }
-          }
-        }
-      });
+      setCapturedSnapshots(snapshots);
+      onCaptureComplete?.(snapshots);
+      return snapshots;
     };
 
     useImperativeHandle(ref, () => ({
-      startVideoRecording,
-      stopVideoRecording,
+      captureSnapshots,
     }));
 
-    // Download video with MP4 conversion or WebM fallback
-    const downloadVideo = async (type: string, blob: Blob) => {
-      const format = getBestVideoFormat();
-      let downloadBlob = blob;
-      let extension = format.extension;
-
-      if (format.canConvertToMP4) {
-        try {
-          toast({
-            title: "Converting to MP4...",
-            description: `Converting ${type} video...`,
-          });
-          downloadBlob = await convertWebMToMP4(blob);
-          extension = "mp4";
-        } catch (error) {
-          console.error("Conversion failed, falling back to WebM:", error);
-          // Fall back to WebM
-          extension = "webm";
-          downloadBlob = blob;
-          toast({
-            title: "Using WebM format",
-            description: "MP4 conversion unavailable, downloading as WebM.",
-          });
-        }
-      }
-
-      const url = URL.createObjectURL(downloadBlob);
+    // Download single snapshot
+    const downloadSnapshot = (type: string, dataUrl: string) => {
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `mockup-${type}-${colorTheme}.${extension}`;
+      a.href = dataUrl;
+      a.download = `mockup-${type}-${colorTheme}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
       toast({
         title: "Download started",
-        description: `${type.charAt(0).toUpperCase() + type.slice(1)} video downloading as ${extension.toUpperCase()}...`,
+        description: `${type.charAt(0).toUpperCase() + type.slice(1)} snapshot downloading...`,
       });
     };
 
-    // Open video preview modal
-    const openVideoPreview = (type: "mobile" | "tablet" | "laptop" | "desktop") => {
-      if (recordedVideos[type]) {
+    // Open image preview modal
+    const openImagePreview = (type: "mobile" | "tablet" | "laptop" | "desktop") => {
+      if (capturedSnapshots[type]) {
         setPreviewDevice(type);
       }
     };
 
-    const downloadAllVideos = async () => {
-      const videos = Object.entries(recordedVideos);
-      if (videos.length === 0) {
+    const downloadAllSnapshots = async () => {
+      const snapshots = Object.entries(capturedSnapshots);
+      if (snapshots.length === 0) {
         toast({
-          title: "No videos available",
-          description: "Record a video first before downloading.",
+          title: "No snapshots available",
+          description: "Capture snapshots first before downloading.",
           variant: "destructive",
         });
         return;
       }
 
-      const format = getBestVideoFormat();
-
-      setIsConvertingAll(true);
-      setConversionProgress(0);
+      setIsDownloadingAll(true);
+      setDownloadProgress(0);
 
       try {
-        for (let i = 0; i < videos.length; i++) {
-          const [type, blob] = videos[i];
-          setConversionProgress(Math.round((i / videos.length) * 100));
-          await downloadVideo(type, blob);
-          // Small delay between downloads
-          await new Promise((resolve) => setTimeout(resolve, 500));
+        const zip = new JSZip();
+
+        for (let i = 0; i < snapshots.length; i++) {
+          const [type, dataUrl] = snapshots[i];
+          setDownloadProgress(Math.round(((i + 1) / snapshots.length) * 80));
+
+          // Convert data URL to blob
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          zip.file(`mockup-${type}-${colorTheme}.png`, blob);
         }
-        setConversionProgress(100);
+
+        setDownloadProgress(90);
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        setDownloadProgress(100);
+
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `mockups-${colorTheme}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
         toast({
-          title: "All downloads complete",
-          description: `Downloaded ${videos.length} video(s) as ${format.canConvertToMP4 ? "MP4" : "WebM"}.`,
+          title: "Download complete",
+          description: `Downloaded ${snapshots.length} snapshots as ZIP.`,
         });
       } catch (error) {
         console.error("Download error:", error);
         toast({
           title: "Download failed",
-          description: "Some videos could not be downloaded.",
+          description: "Some snapshots could not be downloaded.",
           variant: "destructive",
         });
       } finally {
-        setIsConvertingAll(false);
-        setConversionProgress(0);
+        setIsDownloadingAll(false);
+        setDownloadProgress(0);
       }
     };
 
-    const hasRecordedVideos = Object.keys(recordedVideos).length > 0;
+    const hasCapturedSnapshots = Object.keys(capturedSnapshots).length > 0;
 
     return (
       <motion.div
@@ -326,10 +165,10 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
           <div className="flex items-center gap-3">
             <Layers className="w-5 h-5 text-primary" />
             <h2 className="text-xl font-semibold">Device Mockups</h2>
-            {(isVideoRecording || isRecording) && (
-              <span className="flex items-center gap-2 text-sm text-destructive">
-                <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
-                Recording
+            {isCapturing && (
+              <span className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Capturing...
               </span>
             )}
           </div>
@@ -337,24 +176,23 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
           <div className="flex flex-wrap items-center gap-4">
             <DeviceColorPicker selectedTheme={colorTheme} onThemeChange={setColorTheme} />
 
-            {/* Only show download button - no record/stop buttons here */}
-            {isConvertingAll ? (
+            {isDownloadingAll ? (
               <div className="flex items-center gap-3 glass px-4 py-2 rounded-xl">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 <div className="flex flex-col gap-1 min-w-[100px]">
-                  <span className="text-xs text-muted-foreground">Converting to MP4...</span>
-                  <Progress value={conversionProgress} className="h-1.5" />
+                  <span className="text-xs text-muted-foreground">Creating ZIP...</span>
+                  <Progress value={downloadProgress} className="h-1.5" />
                 </div>
               </div>
             ) : (
-              hasRecordedVideos && (
+              hasCapturedSnapshots && (
                 <Button
                   variant="outline"
                   className="rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10"
-                  onClick={downloadAllVideos}
+                  onClick={downloadAllSnapshots}
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Download All {isFFmpegSupported() ? "(MP4)" : "(Video)"}
+                  Download All (ZIP)
                 </Button>
               )
             )}
@@ -372,23 +210,22 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
             >
               <DeviceFrame
                 type={type}
-                screenshot={getCurrentScreenshot(type)}
-                isRecording={isRecording || isVideoRecording}
+                screenshot={screenshots[type]}
                 isLoading={isLoading}
                 colorTheme={colorTheme}
                 onDownload={
-                  recordedVideos[type]
-                    ? () => openVideoPreview(type)
+                  capturedSnapshots[type]
+                    ? () => openImagePreview(type)
                     : undefined
                 }
-                hasVideo={!!recordedVideos[type]}
+                hasSnapshot={!!capturedSnapshots[type]}
               />
             </div>
           ))}
         </div>
 
         {/* Navigation frame indicator */}
-        {(isVideoRecording || isRecording) && navigationFrames.length > 1 && (
+        {navigationFrames.length > 1 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -396,27 +233,17 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
           >
             <div className="glass px-4 py-2 rounded-full flex items-center gap-2">
               <span className="text-sm text-muted-foreground">
-                Navigating: Page {currentFrameIndex + 1} of {navigationFrames.length}
+                {navigationFrames.length} pages captured
               </span>
-              <div className="flex gap-1">
-                {navigationFrames.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === currentFrameIndex ? "bg-primary" : "bg-muted"
-                    }`}
-                  />
-                ))}
-              </div>
             </div>
           </motion.div>
         )}
 
-        {/* Video Preview Modal */}
-        <VideoPreviewModal
+        {/* Image Preview Modal */}
+        <ImagePreviewModal
           isOpen={previewDevice !== null}
           onClose={() => setPreviewDevice(null)}
-          videoBlob={previewDevice ? recordedVideos[previewDevice] : null}
+          imageUrl={previewDevice ? capturedSnapshots[previewDevice] : null}
           deviceType={previewDevice || "mobile"}
           colorTheme={colorTheme}
         />

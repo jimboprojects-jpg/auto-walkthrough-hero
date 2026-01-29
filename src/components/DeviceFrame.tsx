@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Play, Download } from "lucide-react";
+import { Eye, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeviceColorTheme, getThemeColors } from "./DeviceColorPicker";
@@ -7,11 +7,10 @@ import { DeviceColorTheme, getThemeColors } from "./DeviceColorPicker";
 interface DeviceFrameProps {
   type: "mobile" | "tablet" | "laptop" | "desktop";
   screenshot?: string;
-  isRecording?: boolean;
   isLoading?: boolean;
   colorTheme?: DeviceColorTheme;
   onDownload?: () => void;
-  hasVideo?: boolean;
+  hasSnapshot?: boolean;
 }
 
 type DeviceConfig = {
@@ -57,7 +56,7 @@ const deviceConfigs: Record<DeviceFrameProps["type"], DeviceConfig> = {
   },
 };
 
-export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorTheme = "space-gray", onDownload, hasVideo }: DeviceFrameProps) => {
+export const DeviceFrame = ({ type, screenshot, isLoading, colorTheme = "space-gray", onDownload, hasSnapshot }: DeviceFrameProps) => {
   const config = deviceConfigs[type];
   const themeColors = getThemeColors(colorTheme);
 
@@ -135,17 +134,6 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorThe
               </div>
             </div>
           )}
-
-          {/* Recording indicator */}
-          {isRecording && (
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute top-2 right-2 flex items-center gap-2 glass px-2 py-1 rounded-full">
-                <div className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
-                <span className="text-[10px] text-destructive font-medium">REC</span>
-              </div>
-              <div className="absolute inset-0 border-2 border-primary/50 rounded-lg animate-pulse-glow" />
-            </div>
-          )}
         </div>
 
         {/* Home button for tablet */}
@@ -202,18 +190,18 @@ export const DeviceFrame = ({ type, screenshot, isRecording, isLoading, colorThe
         </div>
       )}
 
-      {/* Device label and download button */}
+      {/* Device label and preview button */}
       <div className="flex items-center justify-center gap-2 mt-4">
         <span className="text-sm font-medium text-muted-foreground capitalize">{type}</span>
-        {(hasVideo || screenshot) && onDownload && (
+        {hasSnapshot && onDownload && (
           <Button
             variant="ghost"
             size="icon"
             className="h-6 w-6 rounded-full hover:bg-primary/10"
             onClick={handleDownload}
-            title={hasVideo ? `Preview ${type} video` : `Download ${type} screenshot`}
+            title={`Preview ${type} snapshot`}
           >
-            {hasVideo ? <Play className="h-3 w-3" /> : <Download className="h-3 w-3" />}
+            <Eye className="h-3 w-3" />
           </Button>
         )}
       </div>
