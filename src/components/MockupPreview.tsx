@@ -3,12 +3,20 @@ import { motion } from "framer-motion";
 import { DeviceFrame } from "./DeviceFrame";
 import { DeviceColorPicker, DeviceColorTheme } from "./DeviceColorPicker";
 import { ImagePreviewModal } from "./ImagePreviewModal";
-import { Download, Layers, Loader2 } from "lucide-react";
+import { NavigationCarousel } from "./NavigationCarousel";
+import { Download, Layers, Loader2, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import html2canvas from "html2canvas";
 import JSZip from "jszip";
+
+interface NavigationPage {
+  url: string;
+  screenshot: string;
+  title?: string;
+}
 
 interface MockupPreviewProps {
   screenshots: {
@@ -18,6 +26,7 @@ interface MockupPreviewProps {
     desktop?: string;
   };
   navigationFrames?: string[];
+  navigationPages?: NavigationPage[];
   isCapturing?: boolean;
   isLoading?: boolean;
   onCaptureComplete?: (snapshots: Record<string, string>) => void;
@@ -28,9 +37,10 @@ export interface MockupPreviewHandle {
 }
 
 export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>(
-  ({ screenshots, navigationFrames = [], isCapturing, isLoading, onCaptureComplete }, ref) => {
+  ({ screenshots, navigationFrames = [], navigationPages = [], isCapturing, isLoading, onCaptureComplete }, ref) => {
     const { toast } = useToast();
     const [colorTheme, setColorTheme] = useState<DeviceColorTheme>("space-gray");
+    const [viewMode, setViewMode] = useState<"devices" | "walkthrough">("devices");
     const [capturedSnapshots, setCapturedSnapshots] = useState<Record<string, string>>({});
     const [isDownloadingAll, setIsDownloadingAll] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
@@ -152,6 +162,16 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
     };
 
     const hasCapturedSnapshots = Object.keys(capturedSnapshots).length > 0;
+    const hasNavigationPages = navigationPages.length > 1 || navigationFrames.length > 1;
+    
+    // Build navigation pages from frames if not provided directly
+    const effectiveNavigationPages: NavigationPage[] = navigationPages.length > 0
+      ? navigationPages
+      : navigationFrames.map((screenshot, idx) => ({
+          url: `page-${idx + 1}`,
+          screenshot,
+          title: `Page ${idx + 1}`,
+        }));
 
     return (
       <motion.div
@@ -185,7 +205,7 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
                 </div>
               </div>
             ) : (
-              hasCapturedSnapshots && (
+              hasCapturedSnapshots && viewMode === "devices" && (
                 <Button
                   variant="outline"
                   className="rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10"
@@ -199,43 +219,84 @@ export const MockupPreview = forwardRef<MockupPreviewHandle, MockupPreviewProps>
           </div>
         </div>
 
-        {/* Device grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-end justify-items-center">
-          {(["mobile", "tablet", "laptop", "desktop"] as const).map((type) => (
-            <div
-              key={type}
-              ref={(el) => {
-                deviceRefs.current[type] = el;
-              }}
-            >
-              <DeviceFrame
-                type={type}
-                screenshot={screenshots[type]}
-                isLoading={isLoading}
-                colorTheme={colorTheme}
-                onDownload={
-                  capturedSnapshots[type]
-                    ? () => openImagePreview(type)
-                    : undefined
-                }
-                hasSnapshot={!!capturedSnapshots[type]}
-              />
-            </div>
-          ))}
-        </div>
+        {/* View mode tabs */}
+        {hasNavigationPages && (
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "devices" | "walkthrough")} className="mb-8">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+              <TabsTrigger value="devices" className="flex items-center gap-2">
+                <Layers className="w-4 h-4" />
+                Device Overview
+              </TabsTrigger>
+              <TabsTrigger value="walkthrough" className="flex items-center gap-2">
+                <Images className="w-4 h-4" />
+                Page Walkthrough
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
-        {/* Navigation frame indicator */}
-        {navigationFrames.length > 1 && (
+        {/* Device grid view */}
+        {viewMode === "devices" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-end justify-items-center">
+            {(["mobile", "tablet", "laptop", "desktop"] as const).map((type) => (
+              <div
+                key={type}
+                ref={(el) => {
+                  deviceRefs.current[type] = el;
+                }}
+              >
+                <DeviceFrame
+                  type={type}
+                  screenshot={screenshots[type]}
+                  isLoading={isLoading}
+                  colorTheme={colorTheme}
+                  onDownload={
+                    capturedSnapshots[type]
+                      ? () => openImagePreview(type)
+                      : undefined
+                  }
+                  hasSnapshot={!!capturedSnapshots[type]}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Walkthrough carousel view */}
+        {viewMode === "walkthrough" && hasNavigationPages && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-start justify-items-center">
+            {(["mobile", "tablet", "laptop", "desktop"] as const).map((type) => (
+              <div key={type} className="flex flex-col items-center">
+                <h3 className="text-sm font-medium text-muted-foreground mb-4 capitalize">
+                  {type}
+                </h3>
+                <NavigationCarousel
+                  pages={effectiveNavigationPages}
+                  colorTheme={colorTheme}
+                  deviceType={type}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Navigation frame indicator (only show in devices mode) */}
+        {viewMode === "devices" && navigationFrames.length > 1 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="mt-6 flex justify-center"
           >
-            <div className="glass px-4 py-2 rounded-full flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {navigationFrames.length} pages captured
+            <Button
+              variant="ghost"
+              className="glass px-4 py-2 rounded-full"
+              onClick={() => setViewMode("walkthrough")}
+            >
+              <Images className="w-4 h-4 mr-2" />
+              <span className="text-sm">
+                View {navigationFrames.length} pages as slideshow →
               </span>
-            </div>
+            </Button>
           </motion.div>
         )}
 
