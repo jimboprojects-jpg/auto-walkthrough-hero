@@ -30,6 +30,7 @@ const Index = () => {
     desktop?: string;
   }>({});
   const [navigationFrames, setNavigationFrames] = useState<string[]>([]);
+  const [navigationPages, setNavigationPages] = useState<Array<{ url: string; screenshot: string; title?: string }>>([]);
   const [capturedSnapshots, setCapturedSnapshots] = useState<Record<string, string>>({});
 
   const handleSubmit = useCallback(async (submittedUrl: string) => {
@@ -41,6 +42,7 @@ const Index = () => {
     setScreenshots({});
     setSiteMetadata(null);
     setNavigationFrames([]);
+    setNavigationPages([]);
     setCapturedSnapshots({});
 
     // Start progress animation
@@ -82,13 +84,23 @@ const Index = () => {
           .filter(page => page.screenshot)
           .map(page => page.screenshot as string);
         
+        // Store full page data for walkthrough
+        const pageData = navResult.pages
+          .filter(page => page.screenshot)
+          .map(page => ({
+            url: page.url,
+            screenshot: page.screenshot as string,
+            title: page.title,
+          }));
+        
         setNavigationFrames(frames);
+        setNavigationPages(pageData);
         setProgress(100);
         setStatus("Capture complete!");
         
         toast({
           title: "Website captured!",
-          description: `Captured ${frames.length} pages. Click "Capture Snapshots" to create your device mockups.`,
+          description: `Captured ${frames.length} pages. Use "Page Walkthrough" tab to capture each page individually.`,
         });
       } else if (screenshotResult.success) {
         // Fallback to just screenshots if navigation failed
@@ -274,6 +286,7 @@ const Index = () => {
                   ref={mockupPreviewRef}
                   screenshots={screenshots}
                   navigationFrames={navigationFrames}
+                  navigationPages={navigationPages}
                   isCapturing={isCapturing}
                   isLoading={isLoading}
                   onCaptureComplete={handleSnapshotComplete}
