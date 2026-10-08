@@ -226,10 +226,10 @@ export const NavigationCarousel = ({
         <AnimatePresence mode="wait">
           <motion.div
             key={currentIndex}
-            initial={{ opacity: 0, x: 20 }}
+            initial={isCapturing ? false : { opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
+            exit={isCapturing ? { opacity: 1 } : { opacity: 0, x: -20 }}
+            transition={{ duration: isCapturing ? 0 : 0.2 }}
           >
             <DeviceFrame
               type={deviceType}
