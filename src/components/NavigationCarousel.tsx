@@ -77,11 +77,29 @@ export const NavigationCarousel = ({
     setIsCapturing(true);
     const snapshots: Record<number, string> = {};
     
+    const waitForImages = async (root: HTMLElement) => {
+      const imgs = Array.from(root.querySelectorAll("img"));
+      await Promise.all(
+        imgs.map((img) =>
+          img.complete && img.naturalWidth > 0
+            ? img.decode().catch(() => undefined)
+            : new Promise((res) => {
+                img.onload = res;
+                img.onerror = res;
+                setTimeout(res, 5000);
+              })
+        )
+      );
+    };
+
     for (let i = 0; i < pages.length; i++) {
       setCurrentIndex(i);
-      // Wait for render
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      
+      // Let React swap the page, then wait for slide animation + image load
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      if (!frameRef.current) break;
+      await waitForImages(frameRef.current);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       try {
         const canvas = await html2canvas(frameRef.current, {
           backgroundColor: null,
@@ -91,10 +109,12 @@ export const NavigationCarousel = ({
           allowTaint: true,
         });
         snapshots[i] = canvas.toDataURL("image/png");
+        setCapturedSnapshots((prev) => ({ ...prev, [i]: snapshots[i] }));
       } catch (error) {
         console.error(`Capture error for page ${i}:`, error);
       }
     }
+    setCurrentIndex(0);
     
     setCapturedSnapshots(snapshots);
     toast({
