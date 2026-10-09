@@ -1,7 +1,12 @@
 import { motion } from "framer-motion";
 import { Monitor, Smartphone, Tablet, Laptop } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export const Header = () => {
+type HeaderProps = {
+  onPricing: () => void;
+};
+
+export const Header = ({ onPricing }: HeaderProps) => {
   return (
     <motion.header
       initial={{ opacity: 0, y: -20 }}
@@ -28,6 +33,10 @@ export const Header = () => {
               <p className="text-xs text-muted-foreground">Video Mockup Generator</p>
             </div>
           </div>
+
+          <Button variant="outline" size="sm" onClick={onPricing} className="mr-4 border-primary/40 hover:bg-primary/10">
+            Upgrade
+          </Button>
 
           {/* Device icons */}
           <div className="hidden md:flex items-center gap-4 text-muted-foreground">
