@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Crown, Sparkles } from "lucide-react";
+import { initializePaddle, type Paddle } from "@paddle/paddle-js";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +31,6 @@ const plans = [
     cadence: "/month",
     description: "Everything you need for regular walkthroughs.",
     features: ["30 captures each month", "Animated videos up to 720p", "Music library"],
-    popular: true,
   },
   {
     name: "Premium",
@@ -41,20 +41,50 @@ const plans = [
   },
 ];
 
+const PRICE_IDS = {
+  Starter: "pri_01m4h3p7wf9p61v2rdrs1g8hxt",
+  Premium: "pri_01m4h3n22hfatt3s6gnb1f0exf",
+} as const;
+
 export function PaywallDialog({ open, onOpenChange }: PaywallDialogProps) {
   const { toast } = useToast();
-  const [selectedPlan, setSelectedPlan] = useState("Starter");
+  const [selectedPlan, setSelectedPlan] = useState<"Free Basic" | "Starter" | "Premium">("Starter");
+  const paddleRef = useRef<Paddle>();
+
+  useEffect(() => {
+    const token = import.meta.env.VITE_PADDLE_CLIENT_TOKEN as string | undefined;
+    if (!token) return;
+
+    let cancelled = false;
+    initializePaddle({ token, environment: "sandbox" }).then((paddle) => {
+      if (!cancelled) paddleRef.current = paddle;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCheckout = () => {
-    const checkoutUrl = import.meta.env.VITE_PADDLE_STARTER_CHECKOUT_URL as string | undefined;
-    if (checkoutUrl) {
-      window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+    if (selectedPlan === "Free Basic") return;
+
+    const priceId = PRICE_IDS[selectedPlan];
+    const paddle = paddleRef.current;
+    if (!paddle) {
+      toast({
+        title: "Checkout is loading",
+        description: "Please wait a moment and try again.",
+      });
       return;
     }
 
-    toast({
-      title: "Checkout is almost ready",
-      description: "Connect your Paddle checkout link to start the Starter plan.",
+    paddle.Checkout.open({
+      items: [{ priceId, quantity: 1 }],
+      settings: {
+        displayMode: "overlay",
+        theme: "light",
+        variant: "one-page",
+      },
     });
   };
 
