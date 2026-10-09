@@ -8,6 +8,7 @@ import { SnapshotControls } from "@/components/SnapshotControls";
 import { ProgressBar } from "@/components/ProgressBar";
 import { FeatureCard } from "@/components/FeatureCard";
 import { BackgroundEffects } from "@/components/BackgroundEffects";
+import PaywallDialog from "@/components/PaywallDialog";
 import { useToast } from "@/hooks/use-toast";
 import { captureScreenshots } from "@/lib/api/screenshots";
 import { autoNavigate } from "@/lib/api/navigation";
@@ -32,6 +33,7 @@ const Index = () => {
   const [navigationFrames, setNavigationFrames] = useState<string[]>([]);
   const [navigationPages, setNavigationPages] = useState<Array<{ url: string; screenshot: string; title?: string }>>([]);
   const [capturedSnapshots, setCapturedSnapshots] = useState<Record<string, string>>({});
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   const handleSubmit = useCallback(async (submittedUrl: string) => {
     setUrl(submittedUrl);
@@ -194,7 +196,8 @@ const Index = () => {
     <div className="min-h-screen relative overflow-hidden">
       <BackgroundEffects />
       
-      <Header />
+      <Header onPricing={() => setIsPaywallOpen(true)} />
+      <PaywallDialog open={isPaywallOpen} onOpenChange={setIsPaywallOpen} />
 
       <main className="relative z-10 container mx-auto px-4 py-8">
         {/* Hero Section */}
